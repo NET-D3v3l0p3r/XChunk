@@ -9,6 +9,7 @@ using XChunk.Extensions;
 using XChunk.View;
 using XChunk.Chunk;
 using System.IO;
+using XChunk.Chunk.Component;
 
 namespace XChunk
 {
@@ -40,6 +41,30 @@ namespace XChunk
         protected override void Initialize()
         {
             // TODO: Add your initialization logic here
+
+            if (!File.Exists(@"data\chunks\indices.byte"))
+            {
+                int[] indices = new int[2500000 * 6];
+
+                int offset = 0;
+                int offsetVertices = 0;
+
+                for (int i = 0; i < indices.Length / 6; i++)
+                {
+                    for (int j = 0; j < 6; j++)
+                    {
+                        indices[j + offset] = Definition.IndicesDefinitionSprite[j] + offsetVertices;
+                    }
+                    offset += 6;
+                    offsetVertices += 4;
+                }
+
+                File.WriteAllBytes(@"data\chunks\indices.byte", indices.SerializeToByteArray());
+                indices = new int[0];
+                GC.Collect();
+
+                Console.WriteLine("DONE LOADING INDICES!");
+            }
 
             base.Initialize();
         }
