@@ -122,7 +122,7 @@ namespace XChunk.Chunk
 
                 buildBuffers();
                 sw.Stop();
-                Console.WriteLine("GENERATED ALL IN " + sw.Elapsed.TotalSeconds + " SECONDS!");
+                Console.WriteLine("DONE IN " + sw.Elapsed.TotalSeconds + " SECONDS!");
 
                 IsReady = true;
 
