@@ -12,6 +12,7 @@ using System.IO;
 using XChunk.Chunk.Component;
 using XChunk.MapGen;
 using XChunk.Extensions;
+using System.Threading;
 
 namespace XChunk.Chunk
 {
@@ -42,6 +43,8 @@ namespace XChunk.Chunk
 
         private VertexBuffer vertexBuffer;
         private IndexBuffer indexBuffer;
+
+        private int lastCount = 0;
 
         #region InfDev
 
@@ -120,6 +123,16 @@ namespace XChunk.Chunk
                 for (int i = 0; i < Chunks.Length; i++)
                     Chunks[i].Generate();
 
+                object raw = File.ReadAllBytes(@"data\chunks\indices.byte").DeserializeToDynamicType();
+                int[] indices = (int[])raw;
+
+                indexBuffer = new IndexBuffer(Device, IndexElementSize.ThirtyTwoBits, indices.Length, BufferUsage.WriteOnly);
+                indexBuffer.SetData<int>(indices);
+
+                indices = new int[0];
+
+                vertexBuffer = new VertexBuffer(Device, typeof(VertexPositionTexture), XChunk.TILE_SIZE * 10, BufferUsage.WriteOnly);
+
                 buildBuffers();
                 sw.Stop();
                 Console.WriteLine("DONE IN " + sw.Elapsed.TotalSeconds + " SECONDS!");
@@ -131,54 +144,24 @@ namespace XChunk.Chunk
 
         private void buildBuffers()
         {
-            vertexBuffer = new VertexBuffer(Device, typeof(VertexPositionTexture), XChunk.TILE_SIZE * 4, BufferUsage.None);
-
-            int[] indices = new int[XChunk.TILE_SIZE * 6];
-
             int offset = 0;
-            int vertexOffset = 0;
 
-
-            for (int i = 0; i < XChunk.TILE_SIZE; i++)
-            {
-
-                for (int j = 0; j < 6; j++)
-                {
-                    indices[j + offset] = Definition.IndicesDefinitionSprite[j] + vertexOffset;
-                }
-                offset += 6;
-                vertexOffset += 4;
-            }
-            offset = 0;
-
-            indexBuffer = new IndexBuffer(Device, IndexElementSize.ThirtyTwoBits, XChunk.TILE_SIZE * 6, BufferUsage.WriteOnly);
-            indexBuffer.SetData<int>(indices);
-
-            VertexPositionTexture[] tempPuffer = new VertexPositionTexture[XChunk.TILE_SIZE * 4];
             for (int i = 0; i < Chunks.Length; i++)
             {
-                for (int j = 0; j < Chunks[i].ChunkVertices.Length; j++)
-                {
-                    tempPuffer[j + offset] = Chunks[i].ChunkVertices[j];
-                }
+                vertexBuffer.SetData<VertexPositionTexture>(VertexPositionTexture.VertexDeclaration.VertexStride * offset, Chunks[i].ChunkVertices, 0, Chunks[i].ChunkVertices.Length, VertexPositionTexture.VertexDeclaration.VertexStride);
+
                 offset += Chunks[i].ChunkVertices.Length;
             }
 
-            vertexBuffer.SetData<VertexPositionTexture>(tempPuffer);
-
             verticesCount = XChunk.TILE_SIZE * 2;
-
-            tempPuffer = new VertexPositionTexture[0];
-            indices = new int[0];
-
-            XChunk.IS_OBSOLETE = false;
             GC.Collect();
+            XChunk.IS_OBSOLETE = false;
         }
 
         public void Update(GameTime gTime)
         {
             if (XChunk.IS_OBSOLETE && IsReady)
-                Task.Run(() => { buildBuffers(); });
+                buildBuffers();
         }
         public void Render(Matrix view, Matrix projection, Matrix world)
         {
@@ -198,174 +181,45 @@ namespace XChunk.Chunk
 
         }
 
+        public void expandWorld(Direction direction)
+        {
+            switch (direction)
+            {
+                case Direction.Forward:
 
-        #region Obsolete
-        //private void __removeSequenceZ(int sequence)
-        //{
-        //    VertexPositionTexture[] verts = new VertexPositionTexture[sequenceSizesHorizontal[sequence + 1]];
+                    GlobalTranslation += new Vector3(0, 0, XChunk.Depth);
+                    Vector3 localVector = Vector3.Zero;
+                    for (int x = 0; x < SIZE; x++)
+                    {
+                        localVector.X = x * XChunk.Width;
+                        localVector.Z = (SIZE - 1) * XChunk.Depth;
 
-        //    int offSet = 0;
-        //    for (int i = 0; i <= sequence; i++)
-        //    {
-        //        offSet += sequenceSizesHorizontal[i];
-        //    }
+                        float[] heightMap = simplexNoise.GetNoiseMap2D((int)localVector.X + (int)GlobalTranslation.X, (int)localVector.Z + (int)GlobalTranslation.Z, XChunk.Width, XChunk.Depth);
 
-        //    verticesBuffer.SetData<VertexPositionTexture>(VertexPositionTexture.VertexDeclaration.VertexStride * offSet, verts, 0, verts.Length, VertexPositionTexture.VertexDeclaration.VertexStride);
+                        Chunks[x + 0 * SIZE].ReGenerate(localVector, GlobalTranslation);
+                        Chunks[x + 0 * SIZE].HeightMap = heightMap;
 
-        //    verts = new VertexPositionTexture[0];
-        //    GC.Collect();
-        //}
+                        XChunk currentChunk = Chunks[x + 0 * SIZE];
+                        for (int z = 0; z < SIZE - 1; z++)
+                        {
+                            XChunk toChange = Chunks[x + (z + 1) * SIZE];
+                            toChange.LocalPosition -= new Vector3(0, 0, XChunk.Depth);
+                            Chunks[x + (z + 1) * SIZE] = currentChunk;
+                            Chunks[x + z * SIZE] = toChange;
+                        }
+                    }
 
-        //public void TEST_X(int sequence)
-        //{
+                    for (int i = 0; i < SIZE; i++)
+                    {
+                        Chunks[i + (SIZE - 1) * SIZE].Generate();
+                    }
 
-        //}
-        //public void Expand(Direction direction)
-        //{
-        //    switch (direction)
-        //    {
-        //        case Direction.Forward:
-        //            GlobalTranslation += new Vector3(0, 0, XChunk.Depth);
-
-        //            for (int x = 0; x < SIZE; x++)
-        //            {
-        //                Vector3 localVector = new Vector3(x * XChunk.Width, 0, (SIZE - 1) * XChunk.Depth);
-
-        //                Chunks[x + 0 * SIZE].ReInitialize(localVector, GlobalTranslation, simplexNoise.GetNoiseMap2D((int)localVector.X + (int)GlobalTranslation.X, (int)localVector.Z + (int)GlobalTranslation.Z, XChunk.Width, XChunk.Depth));
-
-        //                XChunk currentChunk = Chunks[x + 0 * SIZE];
-        //                for (int z = 0; z < SIZE - 1; z++)
-        //                {
-        //                    XChunk toChange = Chunks[x + (z + 1) * SIZE];
-        //                    toChange.LocalPosition -= new Vector3(0, 0, XChunk.Depth);
-        //                    Chunks[x + (z + 1) * SIZE] = currentChunk;
-        //                    Chunks[x + z * SIZE] = toChange;
-        //                }
-        //            }
-
-        //            Task.Run(() =>
-        //            {
-
-        //                for (int x = 0; x < SIZE; x++)
-        //                    Chunks[x + (SIZE - 1) * SIZE].Generate();
-
-        //                __internalExpand(direction);
-
-        //                zAxisCounter++;
-        //                if (zAxisCounter >= SIZE)
-        //                    zAxisCounter = 0;
-
-        //                GC.Collect();
-        //            });
+                    XChunk.Flush(); 
 
 
-        //            break;
-        //        case Direction.Backward:
-        //            break;
-        //        case Direction.Left:
-        //            break;
-        //        case Direction.Right:
-        //            break;
-        //    }
-        //}
-        //public VertexPositionTexture[] GetData(Vector3 chunk)
-        //{
-        //    XChunk index = Chunks[(int)chunk.X + (int)chunk.Y * SIZE];
 
-        //    VertexPositionTexture[] buffer = new VertexPositionTexture[index.VertexBufferCount];
-
-        //    if (Optimization == Technique.Optimization_Memory)
-        //        verticesBuffer.GetData<VertexPositionTexture>(VertexPositionTexture.VertexDeclaration.VertexStride * index.VertexBufferIndex, buffer, 0, index.VertexBufferCount, VertexPositionTexture.VertexDeclaration.VertexStride);
-        //    else
-        //        Array.Copy(vertices, index.VertexBufferIndex, buffer, 0, index.VertexBufferCount);
-
-        //    return buffer;
-        //}
-        //private void __internalStart()
-        //{
-
-        //    int offset = 0;
-        //    int vertexOffset = 0;
-
-        //    vertices = new VertexPositionTexture[flatBuffer.Count * 4];
-        //    indices = new int[flatBuffer.Count * 6];
-
-        //    for (int i = 0; i < flatBuffer.Count; i++)
-        //    {
-
-        //        for (int j = 0; j < 4; j++)
-        //        {
-        //            if (flatBuffer[i] != null)
-        //                vertices[j + offset] = flatBuffer[i].Vertices[j];
-        //        }
-        //        offset += 4;
-        //    }
-        //    offset = 0;
-        //    for (int i = 0; i < flatBuffer.Count; i++)
-        //    {
-
-        //        for (int j = 0; j < 6; j++)
-        //        {
-        //            if (flatBuffer[i] != null)
-        //                indices[j + offset] = flatBuffer[i].Indices[j] + vertexOffset;
-        //        }
-        //        offset += 6;
-        //        vertexOffset += 4;
-        //    }
-
-
-        //    verticesBuffer = new VertexBuffer(Device, typeof(VertexPositionTexture), vertices.Length, BufferUsage.None);
-        //    indicesBuffer = new IndexBuffer(Device, IndexElementSize.ThirtyTwoBits, indices.Length, BufferUsage.WriteOnly);
-
-        //    verticesCount = flatBuffer.Count * 2;
-
-        //    verticesBuffer.SetData(vertices);
-        //    indicesBuffer.SetData(indices);
-
-        //    flatBuffer.Clear();
-        //    if (Optimization == Technique.Optimization_Memory)
-        //        vertices = new VertexPositionTexture[0];
-        //    indices = new int[0];
-
-        //}
-        //private void __internalExpand(Direction direction)
-        //{
-        //    #region "Get vertices"
-        //    int offset = 0;
-        //    vertices = new VertexPositionTexture[flatBuffer.Count * 4];
-
-        //    for (int i = 0; i < flatBuffer.Count; i++)
-        //    {
-
-        //        for (int j = 0; j < 4; j++)
-        //        {
-        //            if (flatBuffer[i] != null)
-        //                vertices[j + offset] = flatBuffer[i].Vertices[j];
-        //        }
-        //        offset += 4;
-        //    }
-        //    #endregion
-
-        //    switch (direction)
-        //    {
-        //        case Direction.Forward:
-        //            __removeSequenceZ(zAxisCounter);
-        //            int offSet = 0;
-        //            for (int i = 0; i <= zAxisCounter; i++)
-        //                offSet += sequenceSizesHorizontal[i];
-        //            if (vertices.Length < sequenceSizesHorizontal[zAxisCounter + 1])
-        //                verticesBuffer.SetData<VertexPositionTexture>(VertexPositionTexture.VertexDeclaration.VertexStride * offSet, vertices, 0, vertices.Length, VertexPositionTexture.VertexDeclaration.VertexStride);
-        //            else Console.WriteLine("ERROR!");
-        //            break;
-
-        //        case Direction.Backward:
-        //            break;
-        //    }
-
-        //    flatBuffer.Clear();
-        //    vertices = new VertexPositionTexture[0];
-
-        //}
-        #endregion
+                    break;
+            }
+        }
     }
 }

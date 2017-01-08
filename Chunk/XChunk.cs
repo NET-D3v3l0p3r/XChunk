@@ -19,7 +19,7 @@ namespace XChunk.Chunk
         private static int CHUNK_ID;
 
         public static bool IS_OBSOLETE { get; set; }
-        public static int TILE_SIZE { get; private set; }
+        public static int TILE_SIZE { get; set; }
 
         public int ChunkId { get; private set; }
 
@@ -37,6 +37,8 @@ namespace XChunk.Chunk
         public List<BoundingBox> BoundingBoxes = new List<BoundingBox>();
         public XChunk[] ChunkNeighbours;
 
+        public bool ReCreate;
+
         public BoundingBox ChunkBoundingBox { get; private set; }
         public VertexPositionTexture[] ChunkVertices { get; private set; }
 
@@ -53,6 +55,29 @@ namespace XChunk.Chunk
             ChunkNeighbours = new XChunk[4];
 
             ChunkId = CHUNK_ID++;
+
+            ReCreate = true;
+
+        }
+
+        public void ReGenerate(Vector3 localTranslation, Vector3 globalTranslation)
+        {
+            LocalPosition = localTranslation;
+            GlobalPosition = globalTranslation;
+
+            ChunkBoundingBox = new BoundingBox(GlobalPosition + LocalPosition - new Vector3(0, 256, 0), GlobalPosition + LocalPosition + new Vector3(16, 512, 16));
+
+            ChunkNeighbours[0] = null;
+            ChunkNeighbours[1] = null;
+            ChunkNeighbours[2] = null;
+            ChunkNeighbours[3] = null;
+
+            TILE_SIZE -= ChunkVertices.Length / 4;
+
+            ChunkVertices = new VertexPositionTexture[0];
+            BoundingBoxes.Clear();
+
+            ReCreate = true;
 
         }
 
@@ -131,8 +156,12 @@ namespace XChunk.Chunk
                     }
                 }
             }
-            IS_OBSOLETE = true;
             generateArray();
+        }
+
+        public static void Flush()
+        {
+            IS_OBSOLETE = true;
         }
 
         private void addFlat(int x, int y, int z, Vector2 texCoord, Vector3 translation)
@@ -167,38 +196,35 @@ namespace XChunk.Chunk
             }
 
             flatBuffer.Clear();
- 
             
         }
-        
-        
 
-        public void WriteToHDD()
-        {
-            Task.Run(() =>
-            {
-                lock (SYNC_LOCK)
-                {
-                    string path = @"data\chunks\" + ChunkId + ".dat";
-                    File.WriteAllBytes(path, BoundingBoxes.SerializeToByteArray());
-                    BoundingBoxes.Clear();
-                    GC.Collect();
-                }
-            });
+        //public void WriteToHDD()
+        //{
+        //    Task.Run(() =>
+        //    {
+        //        lock (SYNC_LOCK)
+        //        {
+        //            string path = @"data\chunks\" + ChunkId + ".dat";
+        //            File.WriteAllBytes(path, BoundingBoxes.SerializeToByteArray());
+        //            BoundingBoxes.Clear();
+        //            GC.Collect();
+        //        }
+        //    });
 
-        }
-        public void ReadFromHDD()
-        {
-            Task.Run(() =>
-            {
-                string path = @"data\chunks\" + ChunkId + ".dat";
-                object raw = File.ReadAllBytes(path).DeserializeToDynamicType();
+        //}
+        //public void ReadFromHDD()
+        //{
+        //    Task.Run(() =>
+        //    {
+        //        string path = @"data\chunks\" + ChunkId + ".dat";
+        //        object raw = File.ReadAllBytes(path).DeserializeToDynamicType();
 
-                BoundingBoxes = (List<BoundingBox>)raw;
-                File.Delete(path);
-                GC.Collect();
-            });
-        }
+        //        BoundingBoxes = (List<BoundingBox>)raw;
+        //        File.Delete(path);
+        //        GC.Collect();
+        //    });
+        //}
 
     }
 }

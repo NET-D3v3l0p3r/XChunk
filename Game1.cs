@@ -74,6 +74,8 @@ namespace XChunk
             // TODO: Unload any non ContentManager content here
 
         }
+
+        bool pressed;
         protected override void Update(GameTime gameTime)
         {
             if (GamePad.GetState(PlayerIndex.One).Buttons.Back == ButtonState.Pressed || Keyboard.GetState().IsKeyDown(Keys.Escape))
@@ -111,6 +113,14 @@ namespace XChunk
                 Camera.Velocity *= 1.05f;
             if (Keyboard.GetState().IsKeyDown(Keys.Down))
                 Camera.Velocity /= 1.05f;
+
+            if(!pressed && Keyboard.GetState().IsKeyDown(Keys.Y))
+            {
+                pressed = true;
+                chunkRenderer.expandWorld(ChunkRenderer.Direction.Forward);
+            }
+            if (Keyboard.GetState().IsKeyUp(Keys.Y))
+                pressed = false;
 
             for (int i = 0; i < chunkRenderer.Chunks.Length; i++)
             {
