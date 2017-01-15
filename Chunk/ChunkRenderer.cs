@@ -48,9 +48,11 @@ namespace XChunk.Chunk
 
         #region InfDev
 
+        public int zAxis, xAxis;
+
         SimplexNoiseGenerator simplexNoise = new SimplexNoiseGenerator(15, 1.0f / 512.0f, 1.0f / 512.0f, 1.0f / 512.0f, 1.0f / 512.0f)
         {
-            Factor = 150,
+            Factor = 1,
             Sealevel = 140,
             Octaves = 4
         };
@@ -120,9 +122,13 @@ namespace XChunk.Chunk
             {
                 Stopwatch sw = new Stopwatch();
                 sw.Start();
-                for (int i = 0; i < Chunks.Length; i++)
+                for (int i = 0; i < Chunks.Length; i++) 
                     Chunks[i].Generate();
 
+                for (int i = 0; i < Chunks.Length; i++)
+                {
+                    Chunks[i].CalculateOffset();
+                }
                 object raw = File.ReadAllBytes(@"data\chunks\indices.byte").DeserializeToDynamicType();
                 int[] indices = (int[])raw;
 
@@ -144,13 +150,19 @@ namespace XChunk.Chunk
 
         private void buildBuffers()
         {
-            int offset = 0;
-
+            for (int i = 0; i < Chunks.Length; i++)
+                Chunks[i].CalculateOffset();
+            
             for (int i = 0; i < Chunks.Length; i++)
             {
-                vertexBuffer.SetData<VertexPositionTexture>(VertexPositionTexture.VertexDeclaration.VertexStride * offset, Chunks[i].ChunkVertices, 0, Chunks[i].ChunkVertices.Length, VertexPositionTexture.VertexDeclaration.VertexStride);
+                if (Chunks[i].ReCreate)
+                {
 
-                offset += Chunks[i].ChunkVertices.Length;
+                    vertexBuffer.SetData<VertexPositionTexture>(VertexPositionTexture.VertexDeclaration.VertexStride * Chunks[i].ChunkOffset, Chunks[i].ChunkVertices, 0, Chunks[i].ChunkVertices.Length, VertexPositionTexture.VertexDeclaration.VertexStride);
+
+                    Chunks[i].ReCreate = false;
+
+                }
             }
 
             verticesCount = XChunk.TILE_SIZE * 2;
@@ -203,16 +215,28 @@ namespace XChunk.Chunk
                         for (int z = 0; z < SIZE - 1; z++)
                         {
                             XChunk toChange = Chunks[x + (z + 1) * SIZE];
+                            int oldId = toChange.ChunkId;
+
+                            toChange.ChunkId = currentChunk.ChunkId;
+                            currentChunk.ChunkId = oldId;
+
                             toChange.LocalPosition -= new Vector3(0, 0, XChunk.Depth);
                             Chunks[x + (z + 1) * SIZE] = currentChunk;
                             Chunks[x + z * SIZE] = toChange;
                         }
                     }
+                     
 
                     for (int i = 0; i < SIZE; i++)
                     {
+                        Chunks[i + zAxis * SIZE].ReCreate = true;
                         Chunks[i + (SIZE - 1) * SIZE].Generate();
                     }
+
+                    if (zAxis + 1 >= SIZE)
+                        zAxis = 0;
+
+                    zAxis++;
 
                     XChunk.Flush(); 
 

@@ -21,7 +21,7 @@ namespace XChunk.Chunk
         public static bool IS_OBSOLETE { get; set; }
         public static int TILE_SIZE { get; set; }
 
-        public int ChunkId { get; private set; }
+        public int ChunkId { get; set; }
 
         public static int Width { get; set; }
         public static int Depth { get; set; }
@@ -37,12 +37,14 @@ namespace XChunk.Chunk
         public List<BoundingBox> BoundingBoxes = new List<BoundingBox>();
         public XChunk[] ChunkNeighbours;
 
+        public int ChunkOffset { get; private set; }
         public bool ReCreate;
 
         public BoundingBox ChunkBoundingBox { get; private set; }
         public VertexPositionTexture[] ChunkVertices { get; private set; }
 
         private List<ITile> flatBuffer = new List<ITile>();
+        private bool isInitialized;
 
         public XChunk(ChunkRenderer renderer, Vector3 localTranslation, Vector3 globalTranslation)
         {
@@ -53,8 +55,6 @@ namespace XChunk.Chunk
 
             ChunkBoundingBox = new BoundingBox(GlobalPosition + LocalPosition - new Vector3(0, 256, 0), GlobalPosition + LocalPosition + new Vector3(16, 512, 16));
             ChunkNeighbours = new XChunk[4];
-
-            ChunkId = CHUNK_ID++;
 
             ReCreate = true;
 
@@ -83,6 +83,11 @@ namespace XChunk.Chunk
 
         public void Generate()
         {
+            if (!isInitialized)
+                ChunkId = CHUNK_ID++;
+
+            isInitialized = true;
+
             int x = (int)LocalPosition.X / Width;
             int yx = (int)LocalPosition.Z / Depth;
 
@@ -182,6 +187,7 @@ namespace XChunk.Chunk
         {
             TILE_SIZE += flatBuffer.Count;
 
+
             ChunkVertices = new VertexPositionTexture[flatBuffer.Count * 4];
 
             int offset = 0;
@@ -196,7 +202,14 @@ namespace XChunk.Chunk
             }
 
             flatBuffer.Clear();
-            
+
+        }
+
+        public void CalculateOffset()
+        {
+            ChunkOffset = 0;
+            for (int i = 0; i < ChunkId; i++)
+                ChunkOffset += ChunkRenderer.Chunks[i].ChunkVertices.Length;
         }
 
         //public void WriteToHDD()
